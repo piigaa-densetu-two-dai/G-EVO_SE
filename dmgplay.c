@@ -170,7 +170,6 @@ static void playvgm(uint8_t *data, uint32_t len)
 				break;
 			default:
 				break;
-
 		}
 	}
 }
@@ -200,8 +199,6 @@ int main(int argc, char *argv[])
 	int file;
 	struct stat st;
 	uint8_t *vgmdat;
-	uint8_t *buf;
-	size_t buflen;
 	uint32_t doffset;
 	uint32_t loffset;
 	uint32_t eoffset;
@@ -251,6 +248,8 @@ int main(int argc, char *argv[])
 
 	/* データのチェック */
 	if ((vgmdat[0] == 0x1f) && (vgmdat[1] == 0x8b)) { /* gzip圧縮データなら伸張 */
+		uint8_t *buf;
+		size_t buflen;
 		if (st.st_size < 6) {
 			fprintf(stderr, "invalid file size\n");
 			return 1;
@@ -287,16 +286,16 @@ int main(int argc, char *argv[])
 	goffset = *(uint32_t *)&vgmdat[0x14] + 0x14; /* GD3 offset */
 
 	/* GD3タグ情報の表示 */
-	if (0x14 < goffset) {
+	if ((0x14 < goffset) && (goffset <= (eoffset - (12 + 2)))) { /* +2はgd3tag[0]の分 */
 		if (memcmp("Gd3", &vgmdat[goffset], 3) == 0) { /* GD3タグか */
 			wchar_t *gd3tag[11] = { NULL };
 			uint8_t cnt = 0;
 			uint32_t pos = goffset + 12;
 			/* アライメントされていないのでx86以外の場合は以下注意 */
-			gd3tag[cnt] = (wchar_t *)&vgmdat[pos];
+			gd3tag[cnt++] = (wchar_t *)&vgmdat[pos];
 			for ( ; (pos < eoffset) && (cnt < 11); pos += 2) {
 				if (*(wchar_t *)&vgmdat[pos] == 0) {
-					gd3tag[++cnt] = (wchar_t *)&vgmdat[pos + 2];
+					gd3tag[cnt++] = (wchar_t *)&vgmdat[pos + 2];
 				}
 			}
 			if (gd3tag[2]) {
@@ -327,9 +326,11 @@ int main(int argc, char *argv[])
 	QueryPerformanceCounter((LARGE_INTEGER *)&start);
 
 	/* 再生 */
-	playvgm(&vgmdat[doffset], goffset - doffset);
-	for (int i = 0; (0x1c < loffset) && (!loop || (i < loop)); i++) {
-		playvgm(&vgmdat[loffset], goffset - loffset);
+	if ((0x34 < doffset) && (doffset <= eoffset)) {
+		playvgm(&vgmdat[doffset], eoffset - doffset);
+	}
+	for (int i = 0; ((0x1c < loffset) && (loffset <= eoffset)) && (!loop || (i < loop)); i++) {
+		playvgm(&vgmdat[loffset], eoffset - loffset);
 	}
 	stopvgm(0);
 
